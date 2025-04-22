@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/appointment_service.dart';
+import 'package:intl/intl.dart';
 
 class BookAppointmentScreen extends StatefulWidget {
   @override
@@ -22,50 +23,65 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
     _fetchDoctors();
   }
 
-  // 🔹 Fetch doctors from the Firestore "doctor" collection
+  /// 🔹 Fetch all doctors from Firestore
   Future<void> _fetchDoctors() async {
     setState(() => _isLoading = true);
     try {
       QuerySnapshot querySnapshot =
       await FirebaseFirestore.instance.collection("doctor").get();
 
+      List<Map<String, String>> fetchedDoctors = querySnapshot.docs.map((doc) {
+        return {
+          "id": doc.id,
+          "name": doc["name"]?.toString() ?? "Unknown",
+          "email": doc["email"]?.toString() ?? "N/A",
+          "phone": doc["phone number"]?.toString() ?? "N/A",
+        };
+      }).toList();
+
+
       setState(() {
-        _doctors = querySnapshot.docs.map<Map<String, String>>((doc) {
-          return {
-            "id": doc.id.toString(),
-            "name": doc["name"] ?? "Unknown",
-            "email": doc["email"] ?? "N/A",
-            "phone": doc["phone number"] ?? "N/A",
-          };
-        }).toList();
+        _doctors = fetchedDoctors;
+        if (_doctors.isNotEmpty) {
+          _selectedDoctorId = _doctors[0]["id"];
+          _fetchSlots(_selectedDoctorId!);
+        }
       });
 
       print("✅ Doctors loaded: $_doctors");
     } catch (e) {
       print("❌ Error fetching doctors: $e");
-      _showSnackBar("Failed to load doctors. Please try again.");
+      _showSnackBar("Failed to load doctors: ${e.toString().split(':').last.trim()}");
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-  // 🔹 Fetch available slots for the selected doctor
+  /// 🔹 Fetch available slots for selected doctor
   Future<void> _fetchSlots(String doctorId) async {
     try {
-      DocumentSnapshot doc =
-      await FirebaseFirestore.instance.collection("doctor").doc(doctorId).get();
+      DocumentSnapshot doc = await FirebaseFirestore.instance
+          .collection("doctor")
+          .doc(doctorId)
+          .get();
 
       if (doc.exists && doc.data() != null) {
+        List<String> rawSlots = List<String>.from(
+          (doc["availableSlots"] ?? []).map((slot) => slot.toString()),
+        );
+
+        rawSlots.sort(); // Sort slots by time
+
         setState(() {
-          _availableSlots = List<String>.from(
-              (doc["availableSlots"] ?? []).map((slot) => slot.toString()));
+          _availableSlots = rawSlots;
+          _selectedSlot = _availableSlots.isNotEmpty ? _availableSlots[0] : null;
         });
 
         print("✅ Available slots: $_availableSlots");
       }
     } catch (e) {
       print("❌ Error fetching slots: $e");
-      _showSnackBar("Failed to load time slots.");
+      _showSnackBar("Failed to load slots: ${e.toString().split(':').last.trim()}");
     }
   }
 
@@ -75,7 +91,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
 
   String _getDoctorName() {
     return _doctors
-        .firstWhere((doctor) => doctor["id"] == _selectedDoctorId,
+        .firstWhere((doc) => doc["id"] == _selectedDoctorId,
         orElse: () => {"name": "Unknown"})["name"] ??
         "Unknown";
   }
@@ -91,7 +107,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       builder: (context) => AlertDialog(
         title: Text("Confirm Appointment"),
         content: Text(
-          "Book appointment with Dr. ${_getDoctorName()} at $_selectedSlot?",
+          "Book appointment with Dr. ${_getDoctorName()} at ${_formatSlot(_selectedSlot!)}?",
         ),
         actions: [
           TextButton(
@@ -119,21 +135,29 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
 
     try {
       await _appointmentService.bookAppointment(
-        currentUser.uid, // Patient ID
-        _selectedDoctorId!, // Doctor ID
-        _getDoctorName(), // Doctor Name
-        _selectedSlot!, // Time Slot
+        currentUser.uid,
+        _selectedDoctorId!,
+        _getDoctorName(),
+        _selectedSlot!,
       );
 
       _showSnackBar("✅ Appointment booked successfully!");
 
-      // Navigate back after success
       Future.delayed(Duration(seconds: 1), () {
         Navigator.pop(context);
       });
     } catch (e) {
       print("❌ Error booking appointment: $e");
       _showSnackBar("Failed to book appointment. Try again later.");
+    }
+  }
+
+  String _formatSlot(String slot) {
+    try {
+      DateTime dt = DateTime.parse(slot);
+      return DateFormat('EEEE, MMM d • hh:mm a').format(dt);
+    } catch (e) {
+      return slot; // Fallback in case of parsing issues
     }
   }
 
@@ -147,6 +171,8 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
           children: [
             _isLoading
                 ? Center(child: CircularProgressIndicator())
+                : _doctors.isEmpty
+                ? Text("No doctors available at the moment.")
                 : DropdownButton<String>(
               hint: Text("Select Doctor"),
               value: _selectedDoctorId,
@@ -154,6 +180,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                 setState(() {
                   _selectedDoctorId = newValue;
                   _availableSlots = [];
+                  _selectedSlot = null;
                   if (newValue != null) {
                     _fetchSlots(newValue);
                   }
@@ -167,7 +194,9 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
               }).toList(),
             ),
             SizedBox(height: 20),
-            DropdownButton<String>(
+            _availableSlots.isEmpty
+                ? Text("No available time slots.")
+                : DropdownButton<String>(
               hint: Text("Select Time Slot"),
               value: _selectedSlot,
               onChanged: (String? newValue) {
@@ -176,7 +205,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
               items: _availableSlots.map((slot) {
                 return DropdownMenuItem<String>(
                   value: slot,
-                  child: Text(slot),
+                  child: Text(_formatSlot(slot)),
                 );
               }).toList(),
             ),

@@ -13,7 +13,7 @@ class DoctorDashboardService {
           .collection("appointments")
           .where("doctorId", isEqualTo: doctorId)
           .where("status", isEqualTo: "Upcoming")
-          .orderBy("date", descending: false)
+          .orderBy("time_slot", descending: false) // Updated to use time_slot
           .get();
 
       for (var doc in query.docs) {

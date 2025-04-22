@@ -37,17 +37,13 @@ class _LoginScreenState extends State<LoginScreen> {
         if (userDoc.exists) {
           String role = userDoc["role"];
 
-          // Check if the role is 'Doctor' or 'Patient'
           if (role == "Doctor") {
             Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => DoctorDashboard()));
           } else if (role == "Patient") {
-            // Check if the patient has completed their medical history in the 'medical_history' collection
             DocumentSnapshot medicalHistoryDoc = await _firestore.collection('medical_history').doc(user.uid).get();
             if (medicalHistoryDoc.exists) {
-              // If medical history exists, navigate to the patient dashboard
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PatientDashboard()));
             } else {
-              // If medical history doesn't exist, navigate to the form to enter medical history
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => MedicalHistoryFormScreen(userId: user.uid)));
             }
           }
@@ -66,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.orange.shade400, Colors.purple.shade700],
+            colors: [Color(0xFFE5F1FB), Color(0xFFC6E1F9)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -75,24 +71,24 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Card(
-              elevation: 8,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              color: Colors.white.withOpacity(0.9),
+              elevation: 10,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              color: Colors.white,
               child: Padding(
-                padding: const EdgeInsets.all(20.0),
+                padding: const EdgeInsets.all(24.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CircleAvatar(
                       radius: 40,
-                      backgroundColor: Colors.grey.shade200,
-                      child: Icon(Icons.person, size: 50, color: Colors.black54),
+                      backgroundColor: Color(0xFFF3F4F6),
+                      child: Icon(Icons.person, size: 50, color: Colors.blueGrey),
                     ),
-                    SizedBox(height: 20),
+                    SizedBox(height: 24),
                     _buildTextField(emailController, "Email", Icons.email),
-                    SizedBox(height: 15),
+                    SizedBox(height: 16),
                     _buildTextField(passwordController, "Password", Icons.lock, obscureText: true),
-                    SizedBox(height: 10),
+                    SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -107,7 +103,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         TextButton(
                           onPressed: () {}, // TODO: Implement Forgot Password
-                          child: Text("Forgot Password?", style: TextStyle(color: Colors.blueAccent)),
+                          child: Text("Forgot Password?", style: TextStyle(color: Color(0xFF3B82F6))),
                         ),
                       ],
                     ),
@@ -115,19 +111,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     ElevatedButton(
                       onPressed: handleAuth,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.pink.shade300,
-                        padding: EdgeInsets.symmetric(horizontal: 100, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        elevation: 5,
+                        backgroundColor: Color(0xFF3B82F6),
+                        padding: EdgeInsets.symmetric(horizontal: 100, vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 6,
                       ),
-                      child: Text(isSignUp ? "Sign Up" : "Login", style: TextStyle(fontSize: 18, color: Colors.white)),
+                      child: Text(
+                        isSignUp ? "Sign Up" : "Login",
+                        style: TextStyle(fontSize: 18, color: Colors.white),
+                      ),
                     ),
-                    SizedBox(height: 10),
+                    SizedBox(height: 12),
                     TextButton(
                       onPressed: () => setState(() => isSignUp = !isSignUp),
                       child: Text(
                         isSignUp ? "Already have an account? Login" : "Don't have an account? Sign Up",
-                        style: TextStyle(color: Colors.black87, fontSize: 14),
+                        style: TextStyle(color: Colors.blueGrey, fontSize: 14),
                       ),
                     ),
                   ],
@@ -146,10 +145,11 @@ class _LoginScreenState extends State<LoginScreen> {
       obscureText: obscureText,
       decoration: InputDecoration(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: Color(0xFFF9FAFB),
         prefixIcon: Icon(icon, color: Colors.grey),
         labelText: label,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        labelStyle: TextStyle(color: Colors.blueGrey),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       ),
     );
   }

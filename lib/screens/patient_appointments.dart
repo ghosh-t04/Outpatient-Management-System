@@ -14,7 +14,7 @@ class PatientAppointmentsScreen extends StatelessWidget {
       body: user == null
           ? Center(child: Text("User not logged in"))
           : StreamBuilder<List<AppointmentModel>>(
-        stream: _appointmentService.getPatientAppointments(user!.uid),
+        stream: _appointmentService.getPatientAppointmentsStream(user!.uid),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(child: CircularProgressIndicator());
@@ -40,7 +40,7 @@ class PatientAppointmentsScreen extends StatelessWidget {
                   leading: Icon(Icons.local_hospital, color: Colors.green),
                   title: Text("Doctor: ${appointment.doctorName}"),
                   subtitle: Text(
-                    "Date: ${appointment.date}\nStatus: ${appointment.status}",
+                    "Time: ${appointment.timeSlot}\nStatus: ${appointment.status}",
                   ),
                   trailing: IconButton(
                     icon: Icon(Icons.cancel, color: Colors.red),
@@ -58,7 +58,7 @@ class PatientAppointmentsScreen extends StatelessWidget {
   void _cancelAppointment(BuildContext context, String appointmentId) async {
     bool confirmCancel = await _showConfirmationDialog(context);
     if (confirmCancel) {
-      await _appointmentService.cancelAppointment(appointmentId);
+      await _appointmentService.updateAppointmentStatus(appointmentId, 'Cancelled');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Appointment cancelled successfully")),
       );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Required for Firestore operations
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import '../services/appointment_service.dart';
 import '../models/appointment_model.dart';
 
@@ -12,130 +13,187 @@ class PatientDashboard extends StatefulWidget {
 class _PatientDashboardState extends State<PatientDashboard> {
   final AppointmentService _appointmentService = AppointmentService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  List<AppointmentModel> _appointments = [];
-  bool _isLoading = true;
 
-  // Variables to store medical history data
+  // 🏥 Medical history variables
   String medicalCondition = '';
   String medications = '';
   String allergies = '';
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchAppointments();
-    _fetchMedicalHistory(); // Fetch medical history as well
+    _fetchMedicalHistory();
   }
 
-  // ✅ Fetch appointments from Firestore
-  Future<void> _fetchAppointments() async {
-    User? currentUser = _auth.currentUser;
-    if (currentUser != null) {
+  // 🔍 Fetch medical history from Firestore
+  Future<void> _fetchMedicalHistory() async {
+    User? user = _auth.currentUser;
+    if (user != null) {
       try {
-        List<AppointmentModel> appointments =
-        await _appointmentService.getUpcomingAppointments(currentUser.uid);
+        final doc = await FirebaseFirestore.instance
+            .collection('medical_history')
+            .doc(user.uid)
+            .get();
 
-        setState(() {
-          _appointments = appointments;
-          _isLoading = false;
-        });
+        if (doc.exists) {
+          setState(() {
+            medicalCondition = doc['medicalCondition'] ?? '';
+            medications = doc['medications'] ?? '';
+            allergies = doc['allergies'] ?? '';
+            _isLoading = false;
+          });
+        } else {
+          debugPrint("ℹ️ Medical history not found for user.");
+          setState(() => _isLoading = false);
+        }
       } catch (e) {
-        print("Error fetching appointments: $e");
-        setState(() {
-          _isLoading = false;
-        });
+        debugPrint("❌ Error fetching medical history: $e");
+        setState(() => _isLoading = false);
       }
     }
   }
 
-  // ✅ Fetch medical history from Firestore
-  Future<void> _fetchMedicalHistory() async {
-    User? currentUser = _auth.currentUser;
-    if (currentUser != null) {
-      try {
-        DocumentSnapshot medicalHistoryDoc = await FirebaseFirestore.instance
-            .collection('medical_history')
-            .doc(currentUser.uid)
-            .get();
-
-        if (medicalHistoryDoc.exists) {
-          setState(() {
-            medicalCondition = medicalHistoryDoc['medicalCondition'] ?? '';
-            medications = medicalHistoryDoc['medications'] ?? '';
-            allergies = medicalHistoryDoc['allergies'] ?? '';
-          });
-        }
-      } catch (e) {
-        print("Error fetching medical history: $e");
-      }
+  // 🎨 Helper to color-code appointment status
+  Color _statusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return Colors.orange;
+      case 'confirmed':
+        return Colors.green;
+      case 'cancelled':
+        return Colors.red;
+      case 'upcoming':
+        return Colors.blue;
+      case 'completed':
+        return Colors.grey;
+      default:
+        return Colors.black;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    User? user = _auth.currentUser;
+
     return Scaffold(
       appBar: AppBar(title: const Text("Patient Dashboard")),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ✅ Medical History Section
-            const Text(
-              "Medical History",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Medical Condition: $medicalCondition"),
-                Text("Medications: $medications"),
-                Text("Allergies: $allergies"),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // ✅ Upcoming Appointments Section
-            const Text(
-              "Upcoming Appointments",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            _appointments.isEmpty
-                ? const Text("No upcoming appointments",
-                style: TextStyle(color: Colors.grey))
-                : Column(
-              children: _appointments.map((appointment) {
-                return Card(
-                  elevation: 3,
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  child: ListTile(
-                    title: Text("Dr. ${appointment.doctorName}"),
-                    subtitle: Text("Date: ${appointment.date}"),
-                    trailing: Text(
-                      appointment.status,
-                      style: TextStyle(
-                          color: appointment.status == "Pending"
-                              ? Colors.orange
-                              : Colors.green),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 20),
-
-            // ✅ Book Appointment Button
-            Center(
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pushNamed(context, '/book_appointment');
-                },
-                child: const Text("Book Appointment"),
+          : RefreshIndicator(
+        onRefresh: _fetchMedicalHistory,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 🩺 Medical History
+              const Text(
+                "Medical History",
+                style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold),
               ),
+              const SizedBox(height: 10),
+              _buildInfoRow("Condition", medicalCondition),
+              _buildInfoRow("Medications", medications),
+              _buildInfoRow("Allergies", allergies),
+              const Divider(height: 30),
+
+              // 📅 Upcoming Appointments
+              const Text(
+                "Upcoming Appointments",
+                style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+
+              if (user != null)
+                StreamBuilder<List<AppointmentModel>>(
+                  stream: _appointmentService
+                      .getPatientAppointmentsStream(user.uid),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState ==
+                        ConnectionState.waiting) {
+                      return const Center(
+                          child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      debugPrint("❌ Error: ${snapshot.error}");
+                      return const SizedBox();
+                    }
+
+                    final appointments = snapshot.data ?? [];
+
+                    if (appointments.isEmpty) {
+                      return const Text(
+                        "No upcoming appointments",
+                        style: TextStyle(color: Colors.grey),
+                      );
+                    }
+
+                    return Column(
+                      children: appointments.map((appointment) {
+                        final formattedDate =
+                        DateFormat('MMMM d, y – h:mm a').format(
+                            appointment.timeSlot.toDate());
+
+                        return Card(
+                          elevation: 2,
+                          margin:
+                          const EdgeInsets.symmetric(vertical: 6),
+                          child: ListTile(
+                            title:
+                            Text("Dr. ${appointment.doctorName}"),
+                            subtitle: Text("Date: $formattedDate"),
+                            trailing: Text(
+                              appointment.status,
+                              style: TextStyle(
+                                color: _statusColor(appointment.status),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+
+              const SizedBox(height: 20),
+
+              // ➕ Book Appointment Button
+              Center(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/book_appointment');
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text("Book Appointment"),
+                ),
+              ),
+
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🔤 Helper for displaying labeled medical fields
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: RichText(
+        text: TextSpan(
+          text: "$label: ",
+          style: const TextStyle(
+              color: Colors.black, fontWeight: FontWeight.w600),
+          children: [
+            TextSpan(
+              text: value.isNotEmpty ? value : 'Not provided',
+              style: const TextStyle(
+                  fontWeight: FontWeight.normal, color: Colors.black87),
             ),
           ],
         ),

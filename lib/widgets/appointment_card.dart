@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/appointment_model.dart';
 
 class AppointmentCard extends StatelessWidget {
@@ -13,6 +14,10 @@ class AppointmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Convert Timestamp to DateTime and format it
+    final dateTime = appointment.timeSlot.toDate();
+    final formattedDate = DateFormat('MMM dd, yyyy – hh:mm a').format(dateTime);
+
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -21,7 +26,7 @@ class AppointmentCard extends StatelessWidget {
           "Dr. ${appointment.doctorName}",
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        subtitle: Text("Date: ${appointment.date}"),
+        subtitle: Text("Time: $formattedDate"),
         trailing: IconButton(
           icon: const Icon(Icons.arrow_forward_ios),
           onPressed: onTap,

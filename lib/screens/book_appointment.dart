@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import '../services/appointment_service.dart';
 
 class BookAppointmentScreen extends StatefulWidget {
@@ -13,8 +14,12 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   String? _selectedDoctorId;
   String? _selectedSlot;
   List<String> _availableSlots = [];
+  Map<String, DateTime> _slotMap = {};
   List<Map<String, String>> _doctors = [];
   bool _isLoading = false;
+
+  // Payment selection variables
+  String? _selectedPaymentMethod = 'Cash'; // Default is Cash
 
   @override
   void initState() {
@@ -22,7 +27,6 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
     _fetchDoctors();
   }
 
-  // ✅ Fetch doctors from Firestore safely
   Future<void> _fetchDoctors() async {
     setState(() => _isLoading = true);
     try {
@@ -57,7 +61,6 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
     }
   }
 
-  // ✅ Fetch available slots for selected doctor
   Future<void> _fetchSlots(String doctorId) async {
     try {
       DocumentSnapshot doc =
@@ -72,7 +75,19 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
       setState(() {
-        _availableSlots = List<String>.from(data["availableSlots"] ?? []);
+        _availableSlots = [];
+        _slotMap.clear();
+
+        for (var slot in data["availableSlots"] ?? []) {
+          if (slot is Timestamp) {
+            DateTime dateTime = slot.toDate();
+            String formatted = DateFormat('MMM d, h:mm a').format(dateTime);
+            _availableSlots.add(formatted);
+            _slotMap[formatted] = dateTime;
+          } else if (slot is String) {
+            _availableSlots.add(slot);
+          }
+        }
       });
 
       print("✅ Available slots: $_availableSlots");
@@ -131,16 +146,24 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
     }
 
     try {
-      await _appointmentService.bookAppointment(
-        currentUser.uid, // Patient ID
-        _selectedDoctorId!, // Doctor ID
-        _getDoctorName(), // Doctor Name
-        _selectedSlot!, // Time Slot
-      );
+      DateTime? slotDateTime = _slotMap[_selectedSlot!];
+      if (slotDateTime == null) {
+        _showSnackBar("Invalid time slot selected.");
+        return;
+      }
+
+      // Adding the status field to the appointment data
+      await FirebaseFirestore.instance.collection('appointments').add({
+        'patient_id': currentUser.uid,
+        'doctor_id': _selectedDoctorId,
+        'doctor_name': _getDoctorName(),
+        'time_slot': Timestamp.fromDate(slotDateTime),
+        'status': 'Pending', // Setting status as "Pending"
+        'timestamp': FieldValue.serverTimestamp(),
+      });
 
       _showSnackBar("Appointment booked successfully!");
 
-      // Navigate back after success
       Future.delayed(Duration(seconds: 1), () {
         Navigator.pop(context);
       });
@@ -168,6 +191,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                   setState(() {
                     _selectedDoctorId = newValue;
                     _availableSlots = [];
+                    _selectedSlot = null;
                   });
                   _fetchSlots(newValue);
                 }
@@ -197,6 +221,32 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
             ElevatedButton(
               onPressed: _confirmBooking,
               child: Text("Confirm Appointment"),
+            ),
+            SizedBox(height: 20),
+
+            // Payment UI Section
+            Text("Select Payment Method", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            DropdownButton<String>(
+              value: _selectedPaymentMethod,
+              onChanged: (String? newValue) {
+                setState(() {
+                  _selectedPaymentMethod = newValue;
+                });
+              },
+              items: ['Cash', 'UPI'].map((paymentMethod) {
+                return DropdownMenuItem<String>(
+                  value: paymentMethod,
+                  child: Text(paymentMethod),
+                );
+              }).toList(),
+            ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                // Display the payment method for now
+                print("Payment method selected: $_selectedPaymentMethod");
+              },
+              child: Text("Proceed with Payment"),
             ),
           ],
         ),
